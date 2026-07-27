@@ -11,7 +11,7 @@ export class CryptoUtil {
     if (!text) return null;
     
     // Fallback secret if ENCRYPTION_KEY is not defined in environment
-    const key = process.env.ENCRYPTION_KEY || envConfig.sessionSecret || 'reelpilot-default-encryption-secret-32';
+    const key = process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_SECRET || envConfig.sessionSecret || 'reelpilot-default-encryption-secret-32';
     const hash = crypto.createHash('sha256').update(key).digest();
     const iv = crypto.randomBytes(16);
     
@@ -30,16 +30,19 @@ export class CryptoUtil {
     if (!encryptedText) return null;
     
     const parts = encryptedText.split(':');
-    if (parts.length !== 2) {
-      // Returns plaintext directly if it wasn't encrypted
+    if (parts.length !== 2 || parts[0].length !== 32) {
+      // Returns plaintext directly if it wasn't encrypted (32 hex chars = 16 bytes IV)
       return encryptedText;
     }
 
     try {
       const iv = Buffer.from(parts[0], 'hex');
+      if (iv.length !== 16) {
+        return encryptedText;
+      }
       const encrypted = parts[1];
       
-      const key = process.env.ENCRYPTION_KEY || envConfig.sessionSecret || 'reelpilot-default-encryption-secret-32';
+      const key = process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_SECRET || envConfig.sessionSecret || 'reelpilot-default-encryption-secret-32';
       const hash = crypto.createHash('sha256').update(key).digest();
       
       const decipher = crypto.createDecipheriv(ALGORITHM, hash, iv);

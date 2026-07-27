@@ -288,15 +288,17 @@ export class DashboardController {
         return;
       }
 
-      // Get jobs for next 60 days
-      const from = new Date();
-      const to = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+      // Support optional query params for date range, defaulting to past 30 days and next 60 days
+      const fromParam = req.query.from as string;
+      const toParam = req.query.to as string;
+      const from = fromParam ? new Date(fromParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const to = toParam ? new Date(toParam) : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
 
       const jobs = await prisma.scheduledJob.findMany({
         where: {
           userId,
           scheduledAt: { gte: from, lte: to },
-          status: { in: ['PENDING', 'PAUSED', 'PUBLISHED'] },
+          status: { in: ['PENDING', 'PROCESSING', 'PAUSED', 'PUBLISHED', 'FAILED', 'CANCELLED'] },
         },
         include: { driveFile: true },
         orderBy: { scheduledAt: 'asc' },

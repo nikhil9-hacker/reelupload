@@ -3,6 +3,6 @@ import { SettingsController } from '../../controllers/settings.controller';
 
 const router = Router();
 
-router.use('*', SettingsController.handleSettingsRoute);
+router.get('/', SettingsController.handleSettingsRoute);
 
 export default router;

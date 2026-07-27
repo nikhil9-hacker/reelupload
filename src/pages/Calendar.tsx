@@ -90,12 +90,18 @@ export default function CalendarPage() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const getJobsForDay = (day: number): CalendarJob[] => {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return jobs.filter(j => j.scheduledAt.startsWith(dateStr));
+    return jobs.filter(j => {
+      const d = new Date(j.scheduledAt);
+      return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
+    });
   };
 
   const selectedDayJobs = selectedDate
-    ? jobs.filter(j => j.scheduledAt.startsWith(selectedDate))
+    ? jobs.filter(j => {
+        const d = new Date(j.scheduledAt);
+        const [sYear, sMonth, sDay] = selectedDate.split('-').map(Number);
+        return d.getFullYear() === sYear && d.getMonth() === sMonth - 1 && d.getDate() === sDay;
+      })
     : [];
 
   const isToday = (day: number) =>
