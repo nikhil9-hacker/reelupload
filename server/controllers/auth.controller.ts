@@ -9,6 +9,21 @@ import { ResponseUtil } from '../utils/response.util';
 import { BadRequestError } from '../utils/error.util';
 import { Logger } from '../utils/logger.util';
 
+/**
+ * Returns the correct base origin for OAuth redirect URIs.
+ * Uses APP_URL from env config which is always correct (https in production).
+ * Avoids req.protocol which returns 'http' behind Railway/Vercel reverse proxies.
+ */
+function getBaseOrigin(req: Request): string {
+  // Prefer explicitly configured APP_URL (always correct in production)
+  if (envConfig.appUrl && !envConfig.appUrl.includes('localhost')) {
+    return envConfig.appUrl.replace(/\/$/, '');
+  }
+  // Fallback: honour X-Forwarded-Proto set by reverse proxies (Railway/Vercel)
+  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
+  return `${proto}://${req.get('host')}`;
+}
+
 export class AuthController {
   /**
    * GET /api/v1/auth/instagram/status
@@ -83,7 +98,7 @@ export class AuthController {
         (req.session as any).oauthState = csrf;
       }
 
-      const origin = (req.query.origin as string) || `${req.protocol}://${req.get('host')}`;
+      const origin = getBaseOrigin(req);
       const redirectUri = `${origin}/api/v1/auth/instagram/callback`;
 
       const authUrl = MetaApiService.getAuthorizationUrl(redirectUri, state);
@@ -136,8 +151,9 @@ export class AuthController {
     }
 
     try {
-      const origin = `${req.protocol}://${req.get('host')}`;
+      const origin = getBaseOrigin(req);
       const redirectUri = `${origin}/api/v1/auth/instagram/callback`;
+      Logger.info(`[Instagram Callback] Using redirect URI: ${redirectUri}`);
 
       const stateParts = String(state).split(':');
       const sessionId = stateParts[0] || 'default-guest-session-id';

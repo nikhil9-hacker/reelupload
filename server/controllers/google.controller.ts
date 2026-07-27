@@ -8,6 +8,19 @@ import { ResponseUtil } from '../utils/response.util';
 import { BadRequestError } from '../utils/error.util';
 import { Logger } from '../utils/logger.util';
 
+/**
+ * Returns the correct base origin for OAuth redirect URIs.
+ * Uses APP_URL from env config which is always https in production.
+ * Avoids req.protocol which returns 'http' behind Railway reverse proxies.
+ */
+function getBaseOrigin(req: Request): string {
+  if (envConfig.appUrl && !envConfig.appUrl.includes('localhost')) {
+    return envConfig.appUrl.replace(/\/$/, '');
+  }
+  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
+  return `${proto}://${req.get('host')}`;
+}
+
 export class GoogleAuthController {
   /**
    * GET /api/v1/google/status
@@ -138,8 +151,9 @@ export class GoogleAuthController {
         (req.session as any).oauthState = csrf;
       }
 
-      const origin = (req.query.origin as string) || `${req.protocol}://${req.get('host')}`;
+      const origin = getBaseOrigin(req);
       const redirectUri = `${origin}/api/v1/google/callback`;
+      Logger.info(`[Google OAuth] Redirect URI: ${redirectUri}`);
 
       const googleUrl = GoogleApiService.getAuthUrl(redirectUri, state);
 
@@ -186,8 +200,9 @@ export class GoogleAuthController {
     }
 
     try {
-      const origin = `${req.protocol}://${req.get('host')}`;
+      const origin = getBaseOrigin(req);
       const redirectUri = `${origin}/api/v1/google/callback`;
+      Logger.info(`[Google Callback] Using redirect URI: ${redirectUri}`);
 
       const stateParts = String(state).split(':');
       const sessionId = stateParts[0] || 'default-guest-session-id';
