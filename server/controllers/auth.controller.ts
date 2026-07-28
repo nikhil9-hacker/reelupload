@@ -303,42 +303,41 @@ export class AuthController {
 
         <script>
           const messageData = ${JSON.stringify(data)};
-          
-          if (window.opener) {
-            if (messageData.success) {
-              window.opener.postMessage({
-                type: 'INSTAGRAM_CONNECTED',
-                success: true,
-                account: messageData.account
-              }, '*');
-              
-              window.opener.postMessage({
-                type: 'OAUTH_AUTH_SUCCESS',
-                account: messageData.account
-              }, '*');
-            } else {
-              window.opener.postMessage({
-                type: 'INSTAGRAM_CONNECTED',
-                success: false,
-                error: messageData.error
-              }, '*');
-              
-              window.opener.postMessage({
-                type: 'OAUTH_AUTH_FAILED',
-                error: messageData.error
-              }, '*');
-            }
-            setTimeout(() => {
-              window.close();
-            }, 1000);
-          } else {
-            // Redirect direct flows to onboarding (Buffer style)
-            if (messageData.success) {
-              window.location.href = '/#/onboarding?instagram=connected';
-            } else {
-              window.location.href = '/#/onboarding?instagram=error';
-            }
+
+          // Signal the parent window via localStorage (works even when window.opener is cleared by Instagram)
+          try {
+            localStorage.setItem('reelpilot_oauth_result', JSON.stringify({
+              type: messageData.success ? 'INSTAGRAM_CONNECTED' : 'INSTAGRAM_FAILED',
+              success: messageData.success,
+              account: messageData.account || null,
+              error: messageData.error || null,
+              ts: Date.now()
+            }));
+          } catch(e) {}
+
+          // Also try postMessage if opener is still available
+          if (window.opener && !window.opener.closed) {
+            try {
+              if (messageData.success) {
+                window.opener.postMessage({ type: 'INSTAGRAM_CONNECTED', success: true, account: messageData.account }, '*');
+                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', account: messageData.account }, '*');
+              } else {
+                window.opener.postMessage({ type: 'INSTAGRAM_CONNECTED', success: false, error: messageData.error }, '*');
+                window.opener.postMessage({ type: 'OAUTH_AUTH_FAILED', error: messageData.error }, '*');
+              }
+            } catch(e) {}
           }
+
+          // Always close this popup after a short delay (do NOT redirect — that causes the setup loop)
+          setTimeout(function() {
+            window.close();
+            // If window.close() didn't work (e.g. tab opened directly), show a manual close message
+            setTimeout(function() {
+              if (!window.closed) {
+                document.body.innerHTML += '<p style="text-align:center;color:#888;margin-top:20px;font-size:13px">You can close this window now.</p>';
+              }
+            }, 500);
+          }, 1500);
         </script>
       </body>
       </html>

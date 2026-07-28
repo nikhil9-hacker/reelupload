@@ -141,65 +141,88 @@ export default function Setup() {
 
   // Listen for callback event messages from popup windows (Meta & Google)
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('aistudio')) {
-        return;
-      }
-
+    const handleOAuthResult = (result: { type: string; success: boolean; account?: any; error?: string }) => {
       if (
-        (event.data?.type === 'INSTAGRAM_CONNECTED' && event.data?.success) ||
-        event.data?.type === 'OAUTH_AUTH_SUCCESS'
+        (result.type === 'INSTAGRAM_CONNECTED' && result.success) ||
+        result.type === 'OAUTH_AUTH_SUCCESS'
       ) {
-        // Query status endpoint to retrieve latest connection parameters from PostgreSQL
         checkInstagramStatus().then((isConnected) => {
           setIsConnectingInstagram(false);
           if (isConnected) {
-            setTimeout(() => {
-              setCurrentStep(2);
-            }, 1200);
+            setTimeout(() => { setCurrentStep(2); }, 1200);
           } else {
-            // Fallback: use simulated/transmitted account payload directly if db check fails
-            const authorizedAccount = event.data.account as ExtendedInstagramAccount;
+            const authorizedAccount = result.account as ExtendedInstagramAccount;
             if (authorizedAccount) {
               saveInstagramAccount(authorizedAccount);
               setInstagramAccount(authorizedAccount);
-              setTimeout(() => {
-                setCurrentStep(2);
-              }, 1200);
+              setTimeout(() => { setCurrentStep(2); }, 1200);
             }
           }
         });
-      } else if (
-        event.data?.type === 'OAUTH_AUTH_FAILED' ||
-        (event.data?.type === 'INSTAGRAM_CONNECTED' && !event.data?.success)
-      ) {
+      } else if (result.type === 'INSTAGRAM_FAILED' || (result.type === 'INSTAGRAM_CONNECTED' && !result.success)) {
         setIsConnectingInstagram(false);
-      } else if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+      } else if (result.type === 'GOOGLE_AUTH_SUCCESS') {
         checkGoogleStatus().then((isConnected) => {
           setIsConnectingGoogle(false);
           if (isConnected) {
-            setTimeout(() => {
-              setCurrentStep(3);
-            }, 1200);
+            setTimeout(() => { setCurrentStep(3); }, 1200);
           } else {
-            const email = event.data.email;
+            const email = result.account?.email;
             const newAccount = { email, isConnected: true };
             localStorage.setItem('reelpilot_google_account', JSON.stringify(newAccount));
             setGoogleAccount(newAccount);
-            setTimeout(() => {
-              setCurrentStep(3);
-            }, 1200);
+            setTimeout(() => { setCurrentStep(3); }, 1200);
           }
         });
-      } else if (event.data?.type === 'GOOGLE_AUTH_FAILED') {
+      } else if (result.type === 'GOOGLE_AUTH_FAILED') {
         setIsConnectingGoogle(false);
       }
     };
 
+    // Method 1: postMessage (works when window.opener is available)
+    const handleMessage = (event: MessageEvent) => {
+      const origin = event.origin;
+      // Allow Railway, localhost, and aistudio origins
+      const isAllowed =
+        origin.includes('railway.app') ||
+        origin.includes('localhost') ||
+        origin.includes('aistudio') ||
+        origin.includes('.run.app') ||
+        origin.includes('reelupload');
+      if (!isAllowed) return;
+
+      if (event.data?.type) {
+        handleOAuthResult({
+          type: event.data.type,
+          success: event.data.success,
+          account: event.data.account,
+          error: event.data.error,
+        });
+      }
+    };
+
+    // Method 2: localStorage polling (fallback when Instagram clears window.opener)
+    const lastProcessedTs = { value: 0 };
+    const storageInterval = setInterval(() => {
+      try {
+        const raw = localStorage.getItem('reelpilot_oauth_result');
+        if (!raw) return;
+        const result = JSON.parse(raw);
+        if (result.ts && result.ts > lastProcessedTs.value) {
+          lastProcessedTs.value = result.ts;
+          localStorage.removeItem('reelpilot_oauth_result');
+          handleOAuthResult(result);
+        }
+      } catch (e) {}
+    }, 500);
+
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearInterval(storageInterval);
+    };
   }, []);
+
 
 
 

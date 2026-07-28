@@ -77,7 +77,7 @@ export class MetaApiService {
 
     if (!res.ok || data.error || data.error_message) {
       const errorMessage = data.error_message || data.error?.message || data.error || 'Instagram code exchange failed. Code may be expired or invalid.';
-      Logger.error('[Instagram Business API] Short-lived token exchange failed. Full response:', JSON.stringify(data));
+      Logger.error('[Instagram Business API] Short-lived token exchange failed. Full response:', new Error(JSON.stringify(data)));
       throw new BadRequestError(errorMessage);
     }
 
