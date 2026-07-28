@@ -151,6 +151,7 @@ export class AuthController {
     }
 
     try {
+      const cleanCode = String(code).replace(/#_$/, '').replace(/#$/, '').trim();
       const origin = getBaseOrigin(req);
       const redirectUri = `${origin}/api/v1/auth/instagram/callback`;
       Logger.info(`[Instagram Callback] Using redirect URI: ${redirectUri}`);
@@ -162,7 +163,7 @@ export class AuthController {
       const session = defaultSessionStore.get(sessionId) || req.session;
 
       // 1. Exchange code for Short-Lived Access Token
-      const { shortLivedToken } = await MetaApiService.exchangeCodeForToken(String(code), redirectUri);
+      const { shortLivedToken } = await MetaApiService.exchangeCodeForToken(cleanCode, redirectUri);
 
       // 2. Resolve Instagram Business Account directly
       const profile = await MetaApiService.resolveInstagramBusinessAccount(shortLivedToken);
