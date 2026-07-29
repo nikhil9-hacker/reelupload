@@ -40,8 +40,8 @@ function validateAndLoadConfig(): AppConfig {
     ? rawAppUrl.replace(/\/$/, '')
     : rawAppUrl.replace(/\/$/, '').replace(/^http:\/\//, 'https://');
 
-  const instagramRedirectUri = `${appUrl}/api/v1/auth/instagram/callback`;
-  const googleRedirectUri = `${appUrl}/api/v1/google/callback`;
+  const instagramRedirectUri = process.env.INSTAGRAM_REDIRECT_URI || `${appUrl}/api/v1/auth/instagram/callback`;
+  const googleRedirectUri = process.env.GOOGLE_REDIRECT_URI || `${appUrl}/api/v1/google/callback`;
   const databaseUrl = process.env.DATABASE_URL || 'postgresql://localhost:5432/reelpilot_dev';
   const sessionSecret = process.env.SESSION_SECRET || 'reelpilot-dev-session-secret-change-in-prod';
 

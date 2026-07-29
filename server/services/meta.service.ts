@@ -139,7 +139,7 @@ export class MetaApiService {
     const expiresAt = new Date(Date.now() + longLived.expiresInSeconds * 1000);
 
     // 2. Query profile details directly from Instagram Graph
-    const url = `${this.INSTAGRAM_GRAPH_BASE_URL}/v20.0/me?fields=id,username,name,profile_picture_url&access_token=${longLived.accessToken}`;
+    const url = `${this.INSTAGRAM_GRAPH_BASE_URL}/me?fields=id,username,name,profile_picture_url&access_token=${longLived.accessToken}`;
 
     const res = await fetch(url);
     const data = (await res.json()) as any;
