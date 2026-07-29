@@ -8,6 +8,8 @@ import Library from './pages/Library';
 import Settings from './pages/Settings';
 import UploadLogs from './pages/UploadLogs';
 import NotFound from './pages/NotFound';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import { MainLayout } from './components/layouts/MainLayout';
 
 export default function App() {
@@ -19,6 +21,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/setup" element={<Setup />} />
         <Route path="/onboarding" element={<Setup />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
 
         {/* Private/Main App Layout Routes */}
         <Route element={<MainLayout />}>
