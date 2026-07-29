@@ -9,33 +9,8 @@ import { ResponseUtil } from '../utils/response.util';
 import { BadRequestError } from '../utils/error.util';
 import { Logger } from '../utils/logger.util';
 
-/**
- * Deterministically constructs the canonical redirect URI for OAuth flows.
- * Ensures Step 1 (OAuth authorization dialog) and Step 2 (token exchange callback)
- * produce 100% character-for-character identical redirect_uri strings.
- */
-function getCanonicalRedirectUri(req: Request): string {
-  const callbackPath = '/api/v1/auth/instagram/callback';
-
-  // 1. If process.env.APP_URL is explicitly set in production, use it
-  if (process.env.APP_URL && !process.env.APP_URL.includes('localhost')) {
-    const cleanUrl = process.env.APP_URL.trim().replace(/\/$/, '').replace(/^http:\/\//, 'https://');
-    return `${cleanUrl}${callbackPath}`;
-  }
-
-  // 2. Determine host from request headers
-  const host = req.get('host') || 'localhost:3000';
-  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-
-  if (!isLocal) {
-    const cleanHost = host.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-    return `https://${cleanHost}${callbackPath}`;
-  }
-
-  // 3. Fallback for local development
-  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
-  return `${proto}://${host}${callbackPath}`;
-}
+// Redirect URI is hardcoded at startup from envConfig.instagramRedirectUri (derived from APP_URL env var).
+// This eliminates all per-request dynamic computation and guarantees Step 1 & Step 2 produce identical URIs.
 
 export class AuthController {
   /**
@@ -111,7 +86,7 @@ export class AuthController {
         (req.session as any).oauthState = csrf;
       }
 
-      const redirectUri = getCanonicalRedirectUri(req);
+      const redirectUri = envConfig.instagramRedirectUri;
 
       const authUrl = MetaApiService.getAuthorizationUrl(redirectUri, state);
 
@@ -164,7 +139,7 @@ export class AuthController {
 
     try {
       const cleanCode = String(code).replace(/#_$/, '').replace(/#$/, '').trim();
-      const redirectUri = getCanonicalRedirectUri(req);
+      const redirectUri = envConfig.instagramRedirectUri;
       Logger.info(`[Instagram Callback] Using redirect URI: ${redirectUri}`);
 
       const stateParts = String(state).split(':');

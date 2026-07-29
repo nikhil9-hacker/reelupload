@@ -17,6 +17,10 @@ export interface AppConfig {
   isProduction: boolean;
   isDevelopment: boolean;
   isTest: boolean;
+  /** Canonical redirect URI for Instagram OAuth — hardcoded from APP_URL at startup */
+  instagramRedirectUri: string;
+  /** Canonical redirect URI for Google OAuth — hardcoded from APP_URL at startup */
+  googleRedirectUri: string;
 }
 
 function validateAndLoadConfig(): AppConfig {
@@ -30,7 +34,14 @@ function validateAndLoadConfig(): AppConfig {
     throw new Error(`[Config Error] Invalid PORT specified: ${process.env.PORT}`);
   }
 
-  const appUrl = process.env.APP_URL || `http://localhost:${port}`;
+  const rawAppUrl = process.env.APP_URL || `http://localhost:${port}`;
+  // Enforce HTTPS for non-localhost URLs
+  const appUrl = rawAppUrl.includes('localhost')
+    ? rawAppUrl.replace(/\/$/, '')
+    : rawAppUrl.replace(/\/$/, '').replace(/^http:\/\//, 'https://');
+
+  const instagramRedirectUri = `${appUrl}/api/v1/auth/instagram/callback`;
+  const googleRedirectUri = `${appUrl}/api/v1/google/callback`;
   const databaseUrl = process.env.DATABASE_URL || 'postgresql://localhost:5432/reelpilot_dev';
   const sessionSecret = process.env.SESSION_SECRET || 'reelpilot-dev-session-secret-change-in-prod';
 
@@ -57,6 +68,8 @@ function validateAndLoadConfig(): AppConfig {
     isProduction: nodeEnv === 'production',
     isDevelopment: nodeEnv === 'development',
     isTest: nodeEnv === 'test',
+    instagramRedirectUri,
+    googleRedirectUri,
   });
 }
 

@@ -13,25 +13,8 @@ import { Logger } from '../utils/logger.util';
  * Uses APP_URL from env config which is always https in production.
  * Avoids req.protocol which returns 'http' behind Railway reverse proxies.
  */
-function getCanonicalRedirectUri(req: Request): string {
-  const callbackPath = '/api/v1/google/callback';
-
-  if (process.env.APP_URL && !process.env.APP_URL.includes('localhost')) {
-    const cleanUrl = process.env.APP_URL.trim().replace(/\/$/, '').replace(/^http:\/\//, 'https://');
-    return `${cleanUrl}${callbackPath}`;
-  }
-
-  const host = req.get('host') || 'localhost:3000';
-  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-
-  if (!isLocal) {
-    const cleanHost = host.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-    return `https://${cleanHost}${callbackPath}`;
-  }
-
-  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
-  return `${proto}://${host}${callbackPath}`;
-}
+// Redirect URI is hardcoded at startup from envConfig.googleRedirectUri (derived from APP_URL env var).
+// This eliminates all per-request dynamic computation and guarantees Step 1 & Step 2 produce identical URIs.
 
 export class GoogleAuthController {
   /**
@@ -163,7 +146,7 @@ export class GoogleAuthController {
         (req.session as any).oauthState = csrf;
       }
 
-      const redirectUri = getCanonicalRedirectUri(req);
+      const redirectUri = envConfig.googleRedirectUri;
       Logger.info(`[Google OAuth] Redirect URI: ${redirectUri}`);
 
       const googleUrl = GoogleApiService.getAuthUrl(redirectUri, state);
@@ -211,7 +194,7 @@ export class GoogleAuthController {
     }
 
     try {
-      const redirectUri = getCanonicalRedirectUri(req);
+      const redirectUri = envConfig.googleRedirectUri;
       Logger.info(`[Google Callback] Using redirect URI: ${redirectUri}`);
 
       const stateParts = String(state).split(':');
