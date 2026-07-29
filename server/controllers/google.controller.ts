@@ -13,30 +13,24 @@ import { Logger } from '../utils/logger.util';
  * Uses APP_URL from env config which is always https in production.
  * Avoids req.protocol which returns 'http' behind Railway reverse proxies.
  */
-function getBaseOrigin(req: Request): string {
-  const queryOrigin = req.query.origin as string;
-  if (queryOrigin && (queryOrigin.startsWith('http://') || queryOrigin.startsWith('https://'))) {
-    let qUrl = queryOrigin.replace(/\/$/, '');
-    if (!qUrl.includes('localhost') && qUrl.startsWith('http://')) {
-      qUrl = qUrl.replace('http://', 'https://');
-    }
-    return qUrl;
+function getCanonicalRedirectUri(req: Request): string {
+  const callbackPath = '/api/v1/google/callback';
+
+  if (process.env.APP_URL && !process.env.APP_URL.includes('localhost')) {
+    const cleanUrl = process.env.APP_URL.trim().replace(/\/$/, '').replace(/^http:\/\//, 'https://');
+    return `${cleanUrl}${callbackPath}`;
   }
 
-  if (envConfig.appUrl && !envConfig.appUrl.includes('localhost')) {
-    let url = envConfig.appUrl.replace(/\/$/, '');
-    if (url.startsWith('http://')) {
-      url = url.replace('http://', 'https://');
-    }
-    return url;
+  const host = req.get('host') || 'localhost:3000';
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+
+  if (!isLocal) {
+    const cleanHost = host.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return `https://${cleanHost}${callbackPath}`;
   }
 
   const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
-  let origin = `${proto}://${req.get('host')}`;
-  if (!origin.includes('localhost') && origin.startsWith('http://')) {
-    origin = origin.replace('http://', 'https://');
-  }
-  return origin;
+  return `${proto}://${host}${callbackPath}`;
 }
 
 export class GoogleAuthController {
@@ -169,8 +163,7 @@ export class GoogleAuthController {
         (req.session as any).oauthState = csrf;
       }
 
-      const origin = getBaseOrigin(req);
-      const redirectUri = `${origin}/api/v1/google/callback`;
+      const redirectUri = getCanonicalRedirectUri(req);
       Logger.info(`[Google OAuth] Redirect URI: ${redirectUri}`);
 
       const googleUrl = GoogleApiService.getAuthUrl(redirectUri, state);
@@ -218,8 +211,7 @@ export class GoogleAuthController {
     }
 
     try {
-      const origin = getBaseOrigin(req);
-      const redirectUri = `${origin}/api/v1/google/callback`;
+      const redirectUri = getCanonicalRedirectUri(req);
       Logger.info(`[Google Callback] Using redirect URI: ${redirectUri}`);
 
       const stateParts = String(state).split(':');

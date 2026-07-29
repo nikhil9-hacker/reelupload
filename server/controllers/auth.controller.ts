@@ -10,37 +10,31 @@ import { BadRequestError } from '../utils/error.util';
 import { Logger } from '../utils/logger.util';
 
 /**
- * Returns the correct base origin for OAuth redirect URIs.
- * Uses APP_URL from env config which is always correct (https in production).
- * Avoids req.protocol which returns 'http' behind Railway/Vercel reverse proxies.
+ * Deterministically constructs the canonical redirect URI for OAuth flows.
+ * Ensures Step 1 (OAuth authorization dialog) and Step 2 (token exchange callback)
+ * produce 100% character-for-character identical redirect_uri strings.
  */
-function getBaseOrigin(req: Request): string {
-  // 1. Check explicitly passed origin query parameter (from frontend window.location.origin)
-  const queryOrigin = req.query.origin as string;
-  if (queryOrigin && (queryOrigin.startsWith('http://') || queryOrigin.startsWith('https://'))) {
-    let qUrl = queryOrigin.replace(/\/$/, '');
-    if (!qUrl.includes('localhost') && qUrl.startsWith('http://')) {
-      qUrl = qUrl.replace('http://', 'https://');
-    }
-    return qUrl;
+function getCanonicalRedirectUri(req: Request): string {
+  const callbackPath = '/api/v1/auth/instagram/callback';
+
+  // 1. If process.env.APP_URL is explicitly set in production, use it
+  if (process.env.APP_URL && !process.env.APP_URL.includes('localhost')) {
+    const cleanUrl = process.env.APP_URL.trim().replace(/\/$/, '').replace(/^http:\/\//, 'https://');
+    return `${cleanUrl}${callbackPath}`;
   }
 
-  // 2. Prefer explicitly configured APP_URL (always correct in production)
-  if (envConfig.appUrl && !envConfig.appUrl.includes('localhost')) {
-    let url = envConfig.appUrl.replace(/\/$/, '');
-    if (url.startsWith('http://')) {
-      url = url.replace('http://', 'https://');
-    }
-    return url;
+  // 2. Determine host from request headers
+  const host = req.get('host') || 'localhost:3000';
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+
+  if (!isLocal) {
+    const cleanHost = host.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return `https://${cleanHost}${callbackPath}`;
   }
 
-  // 3. Fallback: honour X-Forwarded-Proto set by reverse proxies (Railway/Vercel)
+  // 3. Fallback for local development
   const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
-  let origin = `${proto}://${req.get('host')}`;
-  if (!origin.includes('localhost') && origin.startsWith('http://')) {
-    origin = origin.replace('http://', 'https://');
-  }
-  return origin;
+  return `${proto}://${host}${callbackPath}`;
 }
 
 export class AuthController {
@@ -117,8 +111,7 @@ export class AuthController {
         (req.session as any).oauthState = csrf;
       }
 
-      const origin = getBaseOrigin(req);
-      const redirectUri = `${origin}/api/v1/auth/instagram/callback`;
+      const redirectUri = getCanonicalRedirectUri(req);
 
       const authUrl = MetaApiService.getAuthorizationUrl(redirectUri, state);
 
@@ -171,8 +164,7 @@ export class AuthController {
 
     try {
       const cleanCode = String(code).replace(/#_$/, '').replace(/#$/, '').trim();
-      const origin = getBaseOrigin(req);
-      const redirectUri = `${origin}/api/v1/auth/instagram/callback`;
+      const redirectUri = getCanonicalRedirectUri(req);
       Logger.info(`[Instagram Callback] Using redirect URI: ${redirectUri}`);
 
       const stateParts = String(state).split(':');
