@@ -15,13 +15,32 @@ import { Logger } from '../utils/logger.util';
  * Avoids req.protocol which returns 'http' behind Railway/Vercel reverse proxies.
  */
 function getBaseOrigin(req: Request): string {
-  // Prefer explicitly configured APP_URL (always correct in production)
-  if (envConfig.appUrl && !envConfig.appUrl.includes('localhost')) {
-    return envConfig.appUrl.replace(/\/$/, '');
+  // 1. Check explicitly passed origin query parameter (from frontend window.location.origin)
+  const queryOrigin = req.query.origin as string;
+  if (queryOrigin && (queryOrigin.startsWith('http://') || queryOrigin.startsWith('https://'))) {
+    let qUrl = queryOrigin.replace(/\/$/, '');
+    if (!qUrl.includes('localhost') && qUrl.startsWith('http://')) {
+      qUrl = qUrl.replace('http://', 'https://');
+    }
+    return qUrl;
   }
-  // Fallback: honour X-Forwarded-Proto set by reverse proxies (Railway/Vercel)
+
+  // 2. Prefer explicitly configured APP_URL (always correct in production)
+  if (envConfig.appUrl && !envConfig.appUrl.includes('localhost')) {
+    let url = envConfig.appUrl.replace(/\/$/, '');
+    if (url.startsWith('http://')) {
+      url = url.replace('http://', 'https://');
+    }
+    return url;
+  }
+
+  // 3. Fallback: honour X-Forwarded-Proto set by reverse proxies (Railway/Vercel)
   const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol;
-  return `${proto}://${req.get('host')}`;
+  let origin = `${proto}://${req.get('host')}`;
+  if (!origin.includes('localhost') && origin.startsWith('http://')) {
+    origin = origin.replace('http://', 'https://');
+  }
+  return origin;
 }
 
 export class AuthController {
