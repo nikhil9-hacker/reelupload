@@ -114,12 +114,21 @@ export class AuthController {
    * Handles callback from Meta OAuth, performs code exchange & account resolution.
    */
   public static async handleInstagramCallback(req: Request, res: Response): Promise<void> {
-    const code = req.query.code as string;
-    const state = req.query.state as string;
-    const error = (req.query.error || req.query.error_reason || req.query.error_message) as string;
-    const errorDescription = (req.query.error_description || req.query.message) as string;
+    Logger.info(`[Instagram Callback Received] Raw URL: ${req.originalUrl}`);
 
-    Logger.info(`[Instagram Callback Received] URL: ${req.originalUrl}`);
+    let code = (req.query.code || req.query.authorization_code) as string;
+    let state = req.query.state as string;
+    let error = (req.query.error || req.query.error_reason || req.query.error_message) as string;
+    let errorDescription = (req.query.error_description || req.query.message) as string;
+
+    // Fallback: parse raw URL searchParams directly from req.originalUrl if Express req.query missed them
+    try {
+      const rawUrl = new URL(req.originalUrl, 'https://reelupload-production.up.railway.app');
+      if (!code) code = rawUrl.searchParams.get('code') || rawUrl.searchParams.get('authorization_code') || '';
+      if (!state) state = rawUrl.searchParams.get('state') || '';
+      if (!error) error = rawUrl.searchParams.get('error') || rawUrl.searchParams.get('error_reason') || rawUrl.searchParams.get('error_message') || '';
+      if (!errorDescription) errorDescription = rawUrl.searchParams.get('error_description') || rawUrl.searchParams.get('message') || '';
+    } catch (e) {}
 
     if (error) {
       const detailedError = errorDescription
@@ -136,7 +145,7 @@ export class AuthController {
     }
 
     if (!code || code.trim() === '') {
-      Logger.warn(`[Instagram Callback] Code parameter missing. Full Query: ${JSON.stringify(req.query)}`);
+      Logger.warn(`[Instagram Callback] Code parameter missing. Full Query: ${JSON.stringify(req.query)}, Raw URL: ${req.originalUrl}`);
       res.status(400).send(
         AuthController.renderCallbackHTML({
           success: false,
