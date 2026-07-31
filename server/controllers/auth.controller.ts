@@ -114,24 +114,33 @@ export class AuthController {
    * Handles callback from Meta OAuth, performs code exchange & account resolution.
    */
   public static async handleInstagramCallback(req: Request, res: Response): Promise<void> {
-    const { code, state, error, error_description } = req.query;
+    const code = req.query.code as string;
+    const state = req.query.state as string;
+    const error = (req.query.error || req.query.error_reason || req.query.error_message) as string;
+    const errorDescription = (req.query.error_description || req.query.message) as string;
+
+    Logger.info(`[Instagram Callback Received] URL: ${req.originalUrl}`);
 
     if (error) {
-      Logger.error('Meta OAuth callback returned error:', new Error(String(error_description || error)));
+      const detailedError = errorDescription
+        ? `${error}: ${errorDescription}`
+        : String(error);
+      Logger.error('[Meta OAuth Callback Error]', new Error(detailedError));
       res.send(
         AuthController.renderCallbackHTML({
           success: false,
-          error: String(error_description || error),
+          error: detailedError,
         })
       );
       return;
     }
 
-    if (!code) {
+    if (!code || code.trim() === '') {
+      Logger.warn(`[Instagram Callback] Code parameter missing. Full Query: ${JSON.stringify(req.query)}`);
       res.status(400).send(
         AuthController.renderCallbackHTML({
           success: false,
-          error: 'Authorization code was missing from callback query parameters.',
+          error: 'Authorization code was missing from Meta callback. Ensure your Instagram account is a Professional/Business account and your Meta App has Instagram Business Login enabled.',
         })
       );
       return;
